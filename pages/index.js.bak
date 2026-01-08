@@ -1,0 +1,636 @@
+import { useEffect, useMemo, useState } from "react";
+
+export default function Home() {
+  const API_BASE = useMemo(() => {
+    return process.env.NEXT_PUBLIC_API_BASE || "";
+  }, []);
+
+  // ---- Interview state ----
+  const [sessionId, setSessionId] = useState("");
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [status, setStatus] = useState("");
+  const [decision, setDecision] = useState("");
+  const [section, setSection] = useState("");
+  const [turn, setTurn] = useState(null);
+  const [reflection, setReflection] = useState("");
+
+  // ---- Story/approval/photo state ----
+  const [storyDraft, setStoryDraft] = useState("");
+  const [storyDraftVersion, setStoryDraftVersion] = useState(null);
+  const [approvalStatus, setApprovalStatus] = useState("");
+  const [editedText, setEditedText] = useState("");
+  const [approvedText, setApprovedText] = useState("");
+  const [photoStatus, setPhotoStatus] = useState("");
+  const [photoObject, setPhotoObject] = useState("");
+  const [photoConsentPdf, setPhotoConsentPdf] = useState(true);
+  const [photoConsentPublish, setPhotoConsentPublish] = useState(false);
+
+  // Signed upload (photo)
+  const [photoUploadUrl, setPhotoUploadUrl] = useState("");
+  const [photoUploadObjectName, setPhotoUploadObjectName] = useState("");
+  const [photoFile, setPhotoFile] = useState(null);
+
+  // ---- UX ----
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Auto-generate a sessionId if empty
+  useEffect(() => {
+    if (!sessionId) setSessionId(`UI_TEST_${Date.now()}`);
+  }, [sessionId]);
+
+  function resetMessages() {
+    setError("");
+    setMsg("");
+  }
+
+  async function startInterview() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/start-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Start failed (${res.status})`);
+
+      setStatus(data.status || "in_progress");
+      setSection(data.current_section || "Background");
+      setTurn(data.turn ?? 1);
+      setQuestion(data.question_text || "");
+      setDecision("");
+      setReflection("");
+      setAnswer("");
+
+      setMsg("Interview started. Answer the question below.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitAnswer() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, answer_text: answer }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `Answer failed (${res.status})`);
+
+      setStatus(data.status || "in_progress");
+      setDecision(data.decision || "");
+      setSection(data.current_section || section);
+      setTurn(data.turn ?? turn);
+      setReflection(data.agent_reflection || "");
+
+      if (data.next_question) setQuestion(data.next_question);
+      else setQuestion("");
+
+      setAnswer("");
+      setMsg("Answer saved.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function finishInterview() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `finish failed (${res.status})`);
+      }
+
+      setStatus(data.status || "complete");
+      setDecision("finished");
+
+      setMsg("Interview finished. Next: Generate Draft.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshSession() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/story?session_id=${encodeURIComponent(sessionId)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `story failed (${res.status})`);
+
+      setStatus(data.status || "in_progress");
+      setApprovalStatus(data.approval_status || "");
+      setStoryDraft(data.story_draft || "");
+      setEditedText(data.edited_story_text || "");
+      setApprovedText(data.approved_story_text || "");
+      setPhotoStatus(data.photo_status || "");
+      setPhotoObject(data.photo_object || "");
+      setPhotoConsentPdf(Boolean(data.photo_consent_pdf));
+      setPhotoConsentPublish(Boolean(data.photo_consent_publish));
+
+      setMsg("Session refreshed from backend.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Generate Draft (and auto-load into edit box) ---
+  async function generateDraft() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/compile-story`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `compile-story failed (${res.status})`);
+
+      const draft = data.story_draft || "";
+      setStoryDraft(draft);
+      setApprovalStatus(data.approval_status || "needs_review");
+      if (data.story_draft_version !== undefined && data.story_draft_version !== null) {
+        setStoryDraftVersion(data.story_draft_version);
+      }
+
+      // IMPORTANT: auto-load draft into the edit box
+      setEditedText(draft);
+
+      setMsg("Draft generated and loaded into the editor. You can edit it now (optional).");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Save Edits (stores edited_story_text; does NOT lock) ---
+  async function saveEdits() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+      if (!editedText.trim()) throw new Error("Edited text is empty.");
+
+      const res = await fetch(`${API_BASE}/edit-story`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, edited_story_text: editedText }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `edit-story failed (${res.status})`);
+
+      setApprovalStatus(data.approval_status || "needs_review");
+      setMsg("Edits saved. Now you can approve when ready.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Approve (locks final story; then photo optional) ---
+  async function approveStory(wantPhoto) {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/approve-story`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          want_photo: wantPhoto,
+          photo_consent_pdf: photoConsentPdf,
+          photo_consent_publish: photoConsentPublish,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `approve-story failed (${res.status})`);
+
+      setApprovalStatus(data.approval_status || "approved");
+      setPhotoStatus(data.photo_status || (wantPhoto ? "requested" : "skipped"));
+
+      setMsg(wantPhoto ? "Approved. Next: upload photo (optional)." : "Approved. Photo skipped.");
+      await refreshSession();
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Photo: Get signed URL ---
+  async function getPhotoUploadUrl() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!API_BASE) throw new Error("Missing NEXT_PUBLIC_API_BASE in .env.local");
+      if (!sessionId) throw new Error("Missing sessionId");
+
+      const res = await fetch(`${API_BASE}/photo-upload-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `photo-upload-url failed (${res.status})`);
+
+      setPhotoUploadUrl(data.upload_url || "");
+      setPhotoUploadObjectName(data.object_name || "");
+      setMsg("Photo upload URL created. Choose a JPG and upload.");
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // --- Photo: PUT file to signed URL, then confirm via /submit-photo ---
+  async function uploadPhotoAndSubmit() {
+    resetMessages();
+    setLoading(true);
+    try {
+      if (!photoFile) throw new Error("Please choose a JPG file first.");
+      if (!photoUploadUrl) throw new Error("Missing upload URL. Click “Get Photo Upload URL” first.");
+
+      // 1) Upload bytes to GCS signed URL
+      const putRes = await fetch(photoUploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "image/jpeg" },
+        body: photoFile,
+      });
+
+      if (!putRes.ok) {
+        const t = await putRes.text();
+        throw new Error(`Photo PUT failed (${putRes.status}): ${t}`);
+      }
+
+      // 2) Confirm with backend
+      const res = await fetch(`${API_BASE}/submit-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          photo_object: photoUploadObjectName || `photos/${sessionId}/profile.jpg`,
+          photo_consent_pdf: photoConsentPdf,
+          photo_consent_publish: photoConsentPublish,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `submit-photo failed (${res.status})`);
+
+      setPhotoStatus(data.photo_status || "uploaded");
+      setPhotoObject(data.photo_object || "");
+      setMsg("Photo uploaded and saved.");
+      await refreshSession();
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function skipPhoto() {
+    resetMessages();
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/skip-photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `skip-photo failed (${res.status})`);
+
+      setPhotoStatus(data.photo_status || "skipped");
+      setMsg("Photo skipped.");
+      await refreshSession();
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const canSubmitAnswer = !!sessionId && !!question && !!answer.trim() && !loading;
+  const canGenerate = !!sessionId && !loading;
+  const canSaveEdits = !!sessionId && !!editedText.trim() && !loading;
+  const canApprove = !!sessionId && !loading && !!(storyDraft || editedText);
+  const showStoryPanel = status === "complete" || status === "needs_review" || !!storyDraft || !!editedText;
+
+  return (
+    <div style={{ maxWidth: 980, margin: "30px auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
+      <h1 style={{ marginBottom: 8 }}>CPL Story Interview</h1>
+
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+        <label style={{ minWidth: 90 }}>Session ID</label>
+        <input
+          value={sessionId}
+          onChange={(e) => setSessionId(e.target.value)}
+          style={{ flex: 1, padding: 10, border: "1px solid #ccc", borderRadius: 8 }}
+        />
+        <button
+          onClick={startInterview}
+          disabled={loading || !sessionId}
+          style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+        >
+          Start Interview
+        </button>
+        <button
+          onClick={refreshSession}
+          disabled={loading || !sessionId}
+          style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+        >
+          Refresh Session
+        </button>
+      </div>
+
+      <div style={{ marginBottom: 12, color: "#444" }}>
+        <strong>Status:</strong> {status || "-"}{" "}
+        <span style={{ marginLeft: 12 }}><strong>Section:</strong> {section || "-"}</span>{" "}
+        <span style={{ marginLeft: 12 }}><strong>Turn:</strong> {turn ?? "-"}</span>{" "}
+        <span style={{ marginLeft: 12 }}><strong>Decision:</strong> {decision || "-"}</span>
+      </div>
+
+      {error ? (
+        <div style={{ padding: 12, background: "#ffe8e8", border: "1px solid #ffb3b3", borderRadius: 8, marginBottom: 16 }}>
+          <strong>Error:</strong> {error}
+        </div>
+      ) : null}
+
+      {msg ? (
+        <div style={{ padding: 12, background: "#eef7ee", border: "1px solid #cde9cd", borderRadius: 8, marginBottom: 16 }}>
+          {msg}
+        </div>
+      ) : null}
+
+      {/* Interview panel */}
+      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginBottom: 18 }}>
+        <h2 style={{ marginTop: 0 }}>Interview</h2>
+
+        <div style={{ padding: 14, border: "1px solid #eee", borderRadius: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Question</div>
+          <div style={{ fontSize: 18, lineHeight: 1.4 }}>
+            {question || "Click “Start Interview” to fetch the first question."}
+          </div>
+        </div>
+
+        {reflection ? (
+          <div style={{ padding: 12, background: "#f5f5f5", border: "1px solid #e5e5e5", borderRadius: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Agent reflection</div>
+            <div>{reflection}</div>
+          </div>
+        ) : null}
+
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Student Answer</div>
+          <textarea
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            rows={4}
+            style={{ width: "100%", padding: 12, border: "1px solid #ccc", borderRadius: 10 }}
+            placeholder="Type the student’s answer here…"
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={submitAnswer}
+            disabled={!canSubmitAnswer}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 10,
+              border: "1px solid #333",
+              cursor: canSubmitAnswer ? "pointer" : "not-allowed",
+              opacity: canSubmitAnswer ? 1 : 0.5,
+            }}
+          >
+            Submit Answer
+          </button>
+
+          <button
+            onClick={finishInterview}
+            disabled={loading || !sessionId}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 10,
+              border: "1px solid #333",
+              cursor: "pointer",
+            }}
+          >
+            Finish Interview
+          </button>
+        </div>
+      </div>
+
+      {/* Story panel */}
+      {showStoryPanel && (
+        <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}>
+          <h2 style={{ marginTop: 0 }}>Story Draft → Edit → Approve → Photo (Optional)</h2>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+            <button
+              onClick={generateDraft}
+              disabled={!canGenerate}
+              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+            >
+              Generate Draft
+            </button>
+
+            <button
+              onClick={saveEdits}
+              disabled={!canSaveEdits}
+              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+            >
+              Save Edits
+            </button>
+
+            <button
+              onClick={() => approveStory(true)}
+              disabled={!canApprove}
+              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+            >
+              Approve Story (then photo)
+            </button>
+
+            <button
+              onClick={() => approveStory(false)}
+              disabled={!canApprove}
+              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+            >
+              Approve Story (skip photo)
+            </button>
+          </div>
+
+          <div style={{ marginBottom: 10, color: "#444" }}>
+            <strong>Approval:</strong> {approvalStatus || "-"}{" "}
+            <span style={{ marginLeft: 12 }}><strong>Photo status:</strong> {photoStatus || "-"}</span>{" "}
+            <span style={{ marginLeft: 12 }}><strong>Draft version:</strong> {storyDraftVersion ?? "-"}</span>
+          </div>
+
+          {/* Editor (auto-loaded with draft after Generate) */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
+              Student Editor (AI draft loads here after you click “Generate Draft”)
+            </div>
+            <textarea
+              value={editedText}
+              onChange={(e) => setEditedText(e.target.value)}
+              rows={10}
+              style={{ width: "100%", padding: 12, border: "1px solid #ccc", borderRadius: 10 }}
+              placeholder="Click “Generate Draft” first…"
+            />
+          </div>
+
+          {/* Read-only previews */}
+          {storyDraft ? (
+            <div style={{ padding: 12, background: "#fafafa", border: "1px solid #eee", borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Latest AI Draft (read-only)</div>
+              <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{storyDraft}</pre>
+            </div>
+          ) : null}
+
+          {approvedText ? (
+            <div style={{ padding: 12, background: "#f5fbff", border: "1px solid #d8efff", borderRadius: 10, marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Approved Story (locked)</div>
+              <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{approvedText}</pre>
+            </div>
+          ) : null}
+
+          {/* Photo section (only after approval) */}
+          {approvalStatus === "approved" && (
+            <div style={{ borderTop: "1px solid #eee", paddingTop: 14 }}>
+              <h3 style={{ marginTop: 0 }}>Photo (Optional)</h3>
+
+              <div style={{ display: "flex", gap: 18, marginBottom: 12, flexWrap: "wrap" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={photoConsentPdf}
+                    onChange={(e) => setPhotoConsentPdf(e.target.checked)}
+                  />
+                  Consent: include photo in PDF
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={photoConsentPublish}
+                    onChange={(e) => setPhotoConsentPublish(e.target.checked)}
+                  />
+                  Consent: include photo for publishing
+                </label>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                <button
+                  onClick={getPhotoUploadUrl}
+                  disabled={loading || !sessionId}
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+                >
+                  Get Photo Upload URL
+                </button>
+
+                <button
+                  onClick={skipPhoto}
+                  disabled={loading || !sessionId}
+                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+                >
+                  Skip Photo
+                </button>
+              </div>
+
+              {photoUploadUrl ? (
+                <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 10, marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Upload JPG</div>
+                  <input
+                    type="file"
+                    accept="image/jpeg"
+                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                  />
+                  <div style={{ marginTop: 10 }}>
+                    <button
+                      onClick={uploadPhotoAndSubmit}
+                      disabled={loading || !photoFile}
+                      style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
+                    >
+                      Upload Photo + Submit
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+                    Object name: <code>{photoUploadObjectName}</code>
+                  </div>
+                </div>
+              ) : null}
+
+              {photoStatus === "uploaded" && photoObject ? (
+                <div style={{ padding: 12, background: "#eef7ee", border: "1px solid #cde9cd", borderRadius: 10 }}>
+                  Photo uploaded: <code>{photoObject}</code>
+                </div>
+              ) : null}
+
+              {photoStatus === "skipped" ? (
+                <div style={{ padding: 12, background: "#f5f5f5", border: "1px solid #e5e5e5", borderRadius: 10 }}>
+                  Photo skipped.
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: 22, fontSize: 13, color: "#666" }}>
+        <div><strong>Backend:</strong> {API_BASE || "(missing NEXT_PUBLIC_API_BASE)"}</div>
+      </div>
+    </div>
+  );
+}
