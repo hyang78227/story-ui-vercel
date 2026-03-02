@@ -78,19 +78,38 @@ function devLog(...args) {
 }
 
 // ---------------------------------------------------------------------------
-// MAP Logo SVG component
+// MAP Logo SVG component — matches real California MAP Initiative logo
 // ---------------------------------------------------------------------------
-function MapLogo({ size = 44 }) {
+function MapLogo({ size = 48 }) {
+  // Scale factor: design is based on 120×56 viewBox
   return (
-    <svg width={size} height={size} viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="MAP Initiative Logo">
-      {/* Navy square background */}
-      <rect width="44" height="44" rx="6" fill={C.navy} />
-      {/* Red triangle accent */}
-      <polygon points="6,38 22,8 38,38" fill={C.red} opacity="0.92" />
-      {/* Gold highlight top */}
-      <polygon points="14,38 22,22 30,38" fill={C.gold} opacity="0.85" />
-      {/* White "M" lettering */}
-      <text x="22" y="37" textAnchor="middle" fontSize="13" fontWeight="bold" fontFamily="Arial,sans-serif" fill={C.white} letterSpacing="0">MAP</text>
+    <svg width={size * 2.14} height={size} viewBox="0 0 120 56" fill="none"
+         xmlns="http://www.w3.org/2000/svg" aria-label="California MAP Initiative Logo">
+      {/* "California" in italic script */}
+      <text x="3" y="14" fontFamily="Georgia, 'Times New Roman', serif" fontStyle="italic"
+            fontSize="12" fontWeight="600" fill={C.navy} letterSpacing="0.2">California</text>
+
+      {/* Large "M" */}
+      <text x="2" y="44" fontFamily="Arial, sans-serif" fontSize="34" fontWeight="900"
+            fill={C.navy} letterSpacing="-1">M</text>
+
+      {/* Large "A" with red triangle arrow inside */}
+      <text x="34" y="44" fontFamily="Arial, sans-serif" fontSize="34" fontWeight="900"
+            fill={C.navy} letterSpacing="-1">A</text>
+      {/* Red upward arrow / triangle inside the A */}
+      <polygon points="46,38 50,26 54,38" fill={C.red} />
+
+      {/* Large "P" */}
+      <text x="66" y="44" fontFamily="Arial, sans-serif" fontSize="34" fontWeight="900"
+            fill={C.navy} letterSpacing="-1">P</text>
+
+      {/* "INITIATIVE" in spaced small caps */}
+      <text x="2" y="53" fontFamily="Arial, sans-serif" fontSize="7" fontWeight="700"
+            fill={C.navy} letterSpacing="3.2">INITIATIVE</text>
+
+      {/* Tagline */}
+      <text x="2" y="60" fontFamily="Arial, sans-serif" fontSize="5" fontWeight="500"
+            fill={C.textMid} letterSpacing="0.8">MAPPING ARTICULATED PATHWAYS</text>
     </svg>
   );
 }
@@ -949,11 +968,33 @@ export default function Home() {
               Mapping Articulated Pathways · Credit for Prior Learning · Working Adults &amp; Veterans
             </div>
           </div>
-          <div style={{ marginLeft: "auto", fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "right" }}>
-            <div style={{ color: C.gold, fontWeight: "700", fontSize: 15 }}>CPL Story Interview</div>
+          <div style={{ marginLeft: "auto", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            {/* Link to published stories */}
+            <a
+              href="https://map.rccd.edu/mycplstory/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                background: C.gold,
+                color: C.navyDark,
+                fontWeight: "700",
+                fontSize: 11,
+                padding: "4px 10px",
+                borderRadius: 20,
+                textDecoration: "none",
+                letterSpacing: 0.2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              📖 Read CPL Stories
+            </a>
+            <div style={{ fontSize: 12, color: C.gold, fontWeight: "700", textAlign: "right" }}>CPL Story Interview</div>
             {sessionId && (
-              <div style={{ fontSize: 11, marginTop: 1 }}>
-                Session: <span style={{ color: "rgba(255,255,255,0.85)", fontFamily: "monospace" }}>{sessionId.slice(0, 20)}{sessionId.length > 20 ? "…" : ""}</span>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.55)", fontFamily: "monospace" }}>
+                {sessionId.slice(0, 22)}{sessionId.length > 22 ? "…" : ""}
               </div>
             )}
           </div>
@@ -970,19 +1011,62 @@ export default function Home() {
         {/* Welcome banner (only before interview starts) */}
         {!question && !showStoryPanel && (
           <Card accentColor={C.gold} style={{ marginBottom: 24, background: `linear-gradient(135deg, ${C.navy}08, ${C.gold}12)` }}>
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
               <div style={{ fontSize: 36, lineHeight: 1 }}>🎓</div>
-              <div>
+              <div style={{ flex: 1, minWidth: 240 }}>
                 <div style={{ fontWeight: "700", fontSize: 18, color: C.navy, marginBottom: 6 }}>
                   Welcome to the CPL Story Interview
                 </div>
                 <div style={{ color: C.textMid, fontSize: 14, lineHeight: 1.65 }}>
-                  Your experience matters. This interview helps us capture your Credit for Prior Learning (CPL) story —
-                  how your work experience, military service, or other training was recognized for college credit.
+                  Your experience matters. This interview captures your Credit for Prior Learning (CPL) story —
+                  how your work, military service, or training was recognized for college credit.
                   There are no wrong answers. Just share your journey in your own words.
                 </div>
-                <div style={{ marginTop: 10, fontSize: 13, color: C.textLight }}>
-                  The interview takes about 10–15 minutes and covers six topic areas.
+                <div style={{ marginTop: 8, fontSize: 13, color: C.textLight }}>
+                  Takes about 10–15 minutes · Six topic areas · Voice or typed answers
+                </div>
+
+                {/* Stories teaser */}
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: "10px 14px",
+                    background: C.white,
+                    border: `1px solid ${C.border}`,
+                    borderLeft: `4px solid ${C.gold}`,
+                    borderRadius: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>💬</span>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontWeight: "600", fontSize: 13, color: C.navy }}>
+                      Curious what other students have shared?
+                    </div>
+                    <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>
+                      Real CPL success stories from working adults and veterans across California.
+                    </div>
+                  </div>
+                  <a
+                    href="https://map.rccd.edu/mycplstory/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      background: C.navy,
+                      color: C.white,
+                      fontWeight: "700",
+                      fontSize: 12,
+                      padding: "7px 14px",
+                      borderRadius: 8,
+                      textDecoration: "none",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Read CPL Stories →
+                  </a>
                 </div>
               </div>
             </div>
@@ -1741,96 +1825,4 @@ export default function Home() {
                       }}
                     >
                       <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14, lineHeight: 1.7, fontFamily: "Georgia, serif" }}>
-                        {finalStoryText || '(No story text loaded yet — click "👁 Preview")'}
-                      </pre>
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 11, color: C.textLight }}>
-                      Uses approved text → edited text → draft (in priority order)
-                    </div>
-                  </div>
-                </div>
-
-                {/* Submit to MAP button */}
-                <div style={{ marginTop: 20 }}>
-                  {alreadySubmitted ? (
-                    <div
-                      style={{
-                        padding: "16px 20px",
-                        background: C.greenLight,
-                        border: `2px solid ${C.greenBorder}`,
-                        borderRadius: 12,
-                        fontWeight: "700",
-                        fontSize: 16,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
-                      <span style={{ fontSize: 24 }}>🎉</span>
-                      <div>
-                        <div style={{ color: C.green }}>Story submitted to MAP!</div>
-                        <div style={{ fontWeight: "400", fontSize: 13, color: C.textMid, marginTop: 2 }}>
-                          Staff will review your story before it is published. Thank you for sharing your journey!
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div style={{ fontSize: 13, color: C.textMid, marginBottom: 10 }}>
-                        Ready to share your story? By submitting, you are sharing your CPL experience with the California MAP Initiative.
-                      </div>
-                      <Btn
-                        onClick={submitFinal}
-                        disabled={loading}
-                        variant="success"
-                        ariaLabel="Submit story to MAP for review"
-                        style={{ fontSize: 15, padding: "13px 28px" }}
-                      >
-                        ✅ Submit My Story to MAP
-                      </Btn>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* Footer */}
-        <div
-          style={{
-            textAlign: "center",
-            fontSize: 12,
-            color: C.textLight,
-            marginTop: 20,
-            paddingTop: 20,
-            borderTop: `1px solid ${C.border}`,
-          }}
-        >
-          <div style={{ marginBottom: 4 }}>
-            California MAP Initiative · Credit for Prior Learning · Working Adults &amp; Veterans
-          </div>
-          {API_BASE && (
-            <div style={{ fontFamily: "monospace", fontSize: 11 }}>
-              API: {API_BASE}
-            </div>
-          )}
-        </div>
-      </main>
-
-      {/* Pulse animation for recording indicator */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        * { box-sizing: border-box; }
-        body { margin: 0; }
-        textarea:focus, input:focus {
-          outline: 2px solid ${C.navy};
-          outline-offset: 1px;
-        }
-      `}</style>
-    </div>
-  );
-}
+                        {finalSto
