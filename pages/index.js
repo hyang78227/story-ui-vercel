@@ -1825,4 +1825,143 @@ export default function Home() {
                       }}
                     >
                       <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14, lineHeight: 1.7, fontFamily: "Georgia, serif" }}>
-                        {finalSto
+                        {finalStoryText || '(No story text loaded yet — click "👁 Preview")'}
+                      </pre>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: C.textLight }}>
+                      Uses approved text → edited text → draft (in priority order)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit to MAP button */}
+                <div style={{ marginTop: 20 }}>
+                  {alreadySubmitted ? (
+                    <div
+                      style={{
+                        padding: "20px 22px",
+                        background: C.greenLight,
+                        border: `2px solid ${C.greenBorder}`,
+                        borderRadius: 12,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                        <span style={{ fontSize: 32 }}>🎉</span>
+                        <div>
+                          <div style={{ fontWeight: "700", fontSize: 17, color: C.green }}>Story submitted to MAP!</div>
+                          <div style={{ fontSize: 13, color: C.textMid, marginTop: 2 }}>
+                            Staff will review your story before it is published. Thank you for sharing your journey!
+                          </div>
+                        </div>
+                      </div>
+                      {/* CTA to the published stories page */}
+                      <div
+                        style={{
+                          padding: "12px 16px",
+                          background: C.white,
+                          border: `1px solid ${C.border}`,
+                          borderLeft: `4px solid ${C.gold}`,
+                          borderRadius: 8,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span style={{ fontSize: 22 }}>📖</span>
+                        <div style={{ flex: 1, minWidth: 180 }}>
+                          <div style={{ fontWeight: "600", fontSize: 13, color: C.navy }}>
+                            While you wait — read stories from other CPL students
+                          </div>
+                          <div style={{ fontSize: 12, color: C.textMid, marginTop: 2 }}>
+                            Lives changed by Credit for Prior Learning — working adults and veterans across California.
+                          </div>
+                        </div>
+                        <a
+                          href="https://map.rccd.edu/mycplstory/"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-block",
+                            background: C.navy,
+                            color: C.white,
+                            fontWeight: "700",
+                            fontSize: 13,
+                            padding: "9px 18px",
+                            borderRadius: 8,
+                            textDecoration: "none",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          My CPL Story →
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: 13, color: C.textMid, marginBottom: 10 }}>
+                        Ready to share your story? By submitting, you are sharing your CPL experience with the California MAP Initiative.
+                      </div>
+                      <Btn
+                        onClick={submitFinal}
+                        disabled={loading}
+                        variant="success"
+                        ariaLabel="Submit story to MAP for review"
+                        style={{ fontSize: 15, padding: "13px 28px" }}
+                      >
+                        ✅ Submit My Story to MAP
+                      </Btn>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Footer */}
+        <div
+          style={{
+            textAlign: "center",
+            fontSize: 12,
+            color: C.textLight,
+            marginTop: 20,
+            paddingTop: 20,
+            borderTop: `1px solid ${C.border}`,
+          }}
+        >
+          <div style={{ marginBottom: 6 }}>
+            California MAP Initiative · Credit for Prior Learning · Working Adults &amp; Veterans
+          </div>
+          <a
+            href="https://map.rccd.edu/mycplstory/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: C.navy, fontWeight: "600", fontSize: 12 }}
+          >
+            map.rccd.edu/mycplstory — Read published CPL stories
+          </a>
+          {API_BASE && (
+            <div style={{ fontFamily: "monospace", fontSize: 11, marginTop: 4 }}>
+              API: {API_BASE}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Pulse animation for recording indicator */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        textarea:focus, input:focus {
+          outline: 2px solid ${C.navy};
+          outline-offset: 1px;
+        }
+      `}</style>
+    </div>
+  );
+}
