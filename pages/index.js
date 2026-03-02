@@ -1,5 +1,5 @@
 /**
- * index_improved.js — CPL Story Interview (Voice + Typed)
+ * index.js — CPL Story Interview (Voice + Typed) — MAP Initiative branded UI
  *
  * Fixes applied vs original index.txt / index_ready_no_voice.js:
  *   FIX-01  /submit-final endpoint + "Submit My Story to MAP" button
@@ -22,6 +22,7 @@
  *   FIX-18  publishStatus state tracks final /submit-final call
  *   FIX-19  Session token read from URL (?session=&token=) and sent as
  *           X-Session-Token header — required when REQUIRE_SESSION_TOKEN=true
+ *   UI-01   MAP Initiative branding (navy/red/gold palette, logo, progress bar)
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -34,10 +35,195 @@ const MAX_STORY_LEN      = 20_000;  // max chars for the story editor
 const MAX_PHOTO_MB       = 5;       // max photo upload size in megabytes
 const REQUEST_TIMEOUT_MS = 20_000;  // 20 s timeout for all API calls
 
+// MAP Initiative brand palette
+const C = {
+  navy:        "#1B3A6B",
+  navyDark:    "#142d54",
+  navyLight:   "#2a4f8f",
+  red:         "#B22234",
+  gold:        "#E8A020",
+  goldLight:   "#f5c842",
+  white:       "#ffffff",
+  offWhite:    "#f5f7fa",
+  border:      "#d8e2f0",
+  textDark:    "#1a1a2e",
+  textMid:     "#4a5568",
+  textLight:   "#718096",
+  green:       "#1a7f3c",
+  greenLight:  "#eef7ee",
+  greenBorder: "#cde9cd",
+  errorBg:     "#fff0f0",
+  errorBorder: "#ffb3b3",
+  warnBg:      "#fffbe6",
+  warnBorder:  "#ffe58f",
+};
+
+// Interview sections in order
+const SECTIONS = ["Background", "Barrier", "CPL Moment", "Impact", "Outcome", "Reflection"];
+
+// Section-specific guidance shown below the question
+const SECTION_GUIDANCE = {
+  "Background":  "Tell us a little about yourself — your work experience, military service, or training before college.",
+  "Barrier":     "Share a challenge or obstacle you faced when trying to access higher education.",
+  "CPL Moment":  "Describe how your prior learning, work, or military experience was recognized for college credit.",
+  "Impact":      "How did earning Credit for Prior Learning change your college journey or save you time and money?",
+  "Outcome":     "What are you working toward now? How has CPL helped you move closer to your goals?",
+  "Reflection":  "Looking back, what would you tell another working adult or veteran about CPL?",
+};
+
 // FIX-13: dev-only logging — no console.log leaking into production
 const isDev = process.env.NODE_ENV === "development";
 function devLog(...args) {
   if (isDev) console.log(...args); // eslint-disable-line no-console
+}
+
+// ---------------------------------------------------------------------------
+// MAP Logo SVG component
+// ---------------------------------------------------------------------------
+function MapLogo({ size = 44 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="MAP Initiative Logo">
+      {/* Navy square background */}
+      <rect width="44" height="44" rx="6" fill={C.navy} />
+      {/* Red triangle accent */}
+      <polygon points="6,38 22,8 38,38" fill={C.red} opacity="0.92" />
+      {/* Gold highlight top */}
+      <polygon points="14,38 22,22 30,38" fill={C.gold} opacity="0.85" />
+      {/* White "M" lettering */}
+      <text x="22" y="37" textAnchor="middle" fontSize="13" fontWeight="bold" fontFamily="Arial,sans-serif" fill={C.white} letterSpacing="0">MAP</text>
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Progress step bar
+// ---------------------------------------------------------------------------
+function ProgressBar({ currentSection, status }) {
+  const activeIdx = SECTIONS.findIndex(
+    (s) => s.toLowerCase() === (currentSection || "").toLowerCase()
+  );
+  const isDone = status === "complete";
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 24, flexWrap: "wrap" }}>
+      {SECTIONS.map((s, i) => {
+        const isActive    = i === activeIdx && !isDone;
+        const isCompleted = isDone || i < activeIdx;
+        return (
+          <div key={s} style={{ display: "flex", alignItems: "center", flex: "1 1 auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 56 }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: "bold",
+                  background: isCompleted ? C.green : isActive ? C.navy : C.border,
+                  color: isCompleted || isActive ? C.white : C.textMid,
+                  border: isActive ? `3px solid ${C.gold}` : "none",
+                  transition: "all 0.3s",
+                  boxShadow: isActive ? `0 0 0 3px ${C.gold}33` : "none",
+                }}
+              >
+                {isCompleted ? "✓" : i + 1}
+              </div>
+              <div
+                style={{
+                  fontSize: 9,
+                  marginTop: 3,
+                  color: isActive ? C.navy : isCompleted ? C.green : C.textLight,
+                  fontWeight: isActive ? "bold" : "normal",
+                  textAlign: "center",
+                  maxWidth: 56,
+                  lineHeight: 1.2,
+                }}
+              >
+                {s}
+              </div>
+            </div>
+            {i < SECTIONS.length - 1 && (
+              <div
+                style={{
+                  flex: 1,
+                  height: 3,
+                  background: i < activeIdx || isDone ? C.green : C.border,
+                  margin: "0 2px",
+                  marginBottom: 16,
+                  borderRadius: 2,
+                  transition: "background 0.3s",
+                }}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reusable styled card
+// ---------------------------------------------------------------------------
+function Card({ children, accentColor, style = {} }) {
+  return (
+    <div
+      style={{
+        background: C.white,
+        border: `1px solid ${C.border}`,
+        borderLeft: accentColor ? `4px solid ${accentColor}` : `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: 20,
+        marginBottom: 20,
+        boxShadow: "0 2px 8px rgba(27,58,107,0.07)",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Styled button helper
+// ---------------------------------------------------------------------------
+function Btn({ onClick, disabled, children, variant = "secondary", ariaLabel, style = {} }) {
+  const base = {
+    padding: "10px 18px",
+    borderRadius: 8,
+    fontWeight: "600",
+    fontSize: 14,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+    transition: "all 0.2s",
+    border: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+  };
+  const variants = {
+    primary:   { background: C.navy, color: C.white },
+    danger:    { background: C.red, color: C.white },
+    success:   { background: C.green, color: C.white },
+    gold:      { background: C.gold, color: C.navyDark },
+    outline:   { background: "transparent", color: C.navy, border: `2px solid ${C.navy}` },
+    ghost:     { background: C.offWhite, color: C.textDark, border: `1px solid ${C.border}` },
+    recording: { background: "#c00", color: C.white },
+    secondary: { background: C.offWhite, color: C.textDark, border: `1px solid ${C.border}` },
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      style={{ ...base, ...variants[variant], ...style }}
+    >
+      {children}
+    </button>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +280,6 @@ export default function Home() {
   const [publishStatus,        setPublishStatus]        = useState(""); // FIX-01 / FIX-18
 
   // FIX-19: session token from invite URL (?session=...&token=...)
-  // Sent as X-Session-Token header when REQUIRE_SESSION_TOKEN=true on backend
   const [sessionToken, setSessionToken] = useState("");
 
   // ---- UX ----
@@ -111,15 +296,6 @@ export default function Home() {
 
   // FIX-15 + FIX-19 combined: read invite URL params on mount, then decide
   // whether to use them or auto-generate a session ID.
-  //
-  // WHY combined: React 18 batches state updates from multiple effects that
-  // run on the same render. If FIX-19 and FIX-15 were separate effects, both
-  // ran in the same cycle and the last one (FIX-15's CPL_ auto-id) always
-  // overwrote the URL session — losing the invite token. One effect, one winner.
-  //
-  // Flow:
-  //   Invite link  → ?session=<id>&token=<tok> → use both, skip auto-generate
-  //   Direct access → no URL params            → auto-generate CPL_<timestamp>
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params     = new URLSearchParams(window.location.search);
@@ -127,14 +303,12 @@ export default function Home() {
     const urlToken   = params.get("token");
 
     if (urlSession) {
-      // Student arrived via invite email link — use the pre-created session + token
       setSessionId(urlSession);
       setSessionToken(urlToken || "");
     } else {
-      // Direct / staff-testing access — auto-generate a throwaway session ID
       setSessionId(`CPL_${Date.now()}`);
     }
-  }, []); // run exactly once on mount
+  }, []);
 
   // Clear stale preview when session ID changes
   useEffect(() => {
@@ -153,12 +327,10 @@ export default function Home() {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      // Stop any live microphone track
       if (activeStreamRef.current) {
         activeStreamRef.current.getTracks().forEach((t) => t.stop());
         activeStreamRef.current = null;
       }
-      // Stop recorder if still running
       const mr = mediaRecorderRef.current;
       if (mr && mr.state !== "inactive") {
         try { mr.stop(); } catch (_) {}
@@ -180,12 +352,6 @@ export default function Home() {
     if (!sessionId)  throw new Error("Missing sessionId");
   }
 
-  /**
-   * FIX-03 + FIX-09: Unified fetch wrapper for all calls to our own API.
-   * - Adds AbortController timeout (default REQUEST_TIMEOUT_MS).
-   * - Consistently parses JSON and throws a human-readable error on failure.
-   * NOTE: Not used for GCS signed-URL PUT calls (those go to external URLs).
-   */
   async function apiFetch(
     path,
     body = null,
@@ -195,7 +361,6 @@ export default function Home() {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // FIX-19: include session token when present (backend validates it)
       const headers = { "Content-Type": "application/json" };
       if (sessionToken) headers["X-Session-Token"] = sessionToken;
       const opts = {
@@ -218,15 +383,11 @@ export default function Home() {
     }
   }
 
-  /**
-   * FIX-09: GET wrapper with timeout (apiFetch handles POST; this handles GET).
-   */
   async function apiGet(path, timeoutMs = REQUEST_TIMEOUT_MS) {
     requireBaseAndSession();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      // FIX-19: include session token header on GET requests too
       const headers = {};
       if (sessionToken) headers["X-Session-Token"] = sessionToken;
       const res  = await fetch(`${API_BASE}${path}`, {
@@ -273,7 +434,6 @@ export default function Home() {
 
   async function submitAnswer() {
     resetMessages();
-    // FIX-06: enforce length limit before hitting the network
     if (answer.length > MAX_ANSWER_LEN) {
       setError(
         `Answer is too long (${answer.length.toLocaleString()} / ${MAX_ANSWER_LEN.toLocaleString()} chars). Please shorten it.`
@@ -319,7 +479,6 @@ export default function Home() {
       return;
     }
 
-    // FIX-04: store ref so cleanup can stop the stream on unmount
     activeStreamRef.current = stream;
 
     const mr = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
@@ -333,7 +492,6 @@ export default function Home() {
     mr.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       if (mountedRef.current) setRecordedBlob(blob);
-      // Release mic tracks as soon as recording stops
       stream.getTracks().forEach((t) => t.stop());
       activeStreamRef.current = null;
     };
@@ -353,20 +511,17 @@ export default function Home() {
 
   async function uploadTranscribeAndSubmitVoice() {
     resetMessages();
-    // FIX-02: dedicated isUploading flag so the rest of the page stays usable
     setIsUploading(true);
     try {
       requireBaseAndSession();
       if (!recordedBlob) throw new Error("No recording yet. Record audio first.");
       if (turn == null)  throw new Error("Turn is not set yet. Start Interview first.");
 
-      devLog("VOICE flow", { sessionId, turn, blobSize: recordedBlob.size }); // FIX-13
+      devLog("VOICE flow", { sessionId, turn, blobSize: recordedBlob.size });
 
-      // 1) Get signed PUT URL for audio
       const upData = await apiFetch("/upload-url", { session_id: sessionId, turn });
       if (!upData.upload_url) throw new Error("upload-url did not return upload_url");
 
-      // 2) PUT audio bytes directly to GCS (external URL — bypass apiFetch)
       const contentType = recordedBlob.type || "audio/webm";
       const putRes = await fetch(upData.upload_url, {
         method: "PUT",
@@ -378,7 +533,6 @@ export default function Home() {
         throw new Error(`Audio PUT failed (${putRes.status}): ${t}`);
       }
 
-      // 3) Tell backend to transcribe + score
       const data = await apiFetch("/submit-turn", { session_id: sessionId, turn });
       if (!mountedRef.current) return;
 
@@ -479,7 +633,6 @@ export default function Home() {
       setError("Editor is empty. Generate draft first (or paste text).");
       return;
     }
-    // FIX-06: enforce story length limit
     if (editedText.length > MAX_STORY_LEN) {
       setError(
         `Story is too long (${editedText.length.toLocaleString()} / ${MAX_STORY_LEN.toLocaleString()} chars). Please shorten it.`
@@ -505,7 +658,6 @@ export default function Home() {
   }
 
   async function approveStory(wantPhoto) {
-    // FIX-10: require explicit confirmation — this action is irreversible
     if (
       !window.confirm(
         "Are you sure? This will lock your story — it cannot be edited further."
@@ -570,7 +722,6 @@ export default function Home() {
       if (!photoFile)      throw new Error("Please choose a JPG file first.");
       if (!photoUploadUrl) throw new Error('Missing upload URL. Click "Get Photo Upload URL" first.');
 
-      // FIX-08: validate file type and size before touching the network
       if (!photoFile.type.startsWith("image/jpeg")) {
         throw new Error("Please upload a JPEG image (.jpg). Other formats are not accepted.");
       }
@@ -580,7 +731,6 @@ export default function Home() {
         );
       }
 
-      // 1) PUT bytes to signed URL (external — bypass apiFetch)
       const putRes = await fetch(photoUploadUrl, {
         method: "PUT",
         headers: { "Content-Type": "image/jpeg" },
@@ -591,7 +741,6 @@ export default function Home() {
         throw new Error(`Photo PUT failed (${putRes.status}): ${t}`);
       }
 
-      // 2) Confirm with backend
       const data = await apiFetch("/submit-photo", {
         session_id: sessionId,
         photo_object: photoUploadObjectName || `photos/${sessionId}/profile.jpg`,
@@ -636,7 +785,7 @@ export default function Home() {
   async function loadPublishPreview() {
     const sid  = sessionId;
     const base = API_BASE;
-    devLog("loadPublishPreview called", { sid, base }); // FIX-13
+    devLog("loadPublishPreview called", { sid, base });
 
     setLoading(true);
     setError("");
@@ -646,7 +795,6 @@ export default function Home() {
     try {
       requireBaseAndSession();
 
-      // 1) Fetch session story (GET)
       const storyData = await apiGet(
         `/story?session_id=${encodeURIComponent(sid)}`
       );
@@ -666,9 +814,8 @@ export default function Home() {
         String(storyData.story_draft         || "").trim();
       setFinalStoryText(best);
 
-      // 2) Photo preview URL — only if a photo was uploaded
       const ps = String(nextPhotoStatus || "").trim().toLowerCase();
-      devLog("photo_status in loadPublishPreview", ps); // FIX-13
+      devLog("photo_status in loadPublishPreview", ps);
       if (ps === "uploaded") {
         const previewData = await apiFetch("/photo-preview-url", { session_id: sid });
         if (!mountedRef.current) return;
@@ -681,7 +828,7 @@ export default function Home() {
       setMsg("Publish preview loaded.");
       setPublishPreviewLoaded(true);
     } catch (e) {
-      devLog("ERR: loadPublishPreview", e); // FIX-13
+      devLog("ERR: loadPublishPreview", e);
       if (mountedRef.current) {
         setError(String(e?.message || e));
         setPublishPreviewLoaded(false);
@@ -701,7 +848,7 @@ export default function Home() {
     try {
       const data = await apiFetch("/submit-final", { session_id: sessionId });
       if (!mountedRef.current) return;
-      setPublishStatus(data.publish_status || "publish_ready"); // FIX-18
+      setPublishStatus(data.publish_status || "publish_ready");
       setMsg(data.message || "Your story has been submitted to MAP. Thank you!");
     } catch (e) {
       if (mountedRef.current) setError(String(e.message || e));
@@ -736,7 +883,6 @@ export default function Home() {
   // Derived UI flags
   // ---------------------------------------------------------------------------
 
-  // FIX-17: detect locked state to make editor read-only
   const isLocked = (approvalStatus || "").toLowerCase() === "approved";
 
   const canSubmitAnswer = !!sessionId && !!question && !!answer.trim() && !loading;
@@ -762,7 +908,7 @@ export default function Home() {
       String(finalStoryText || "").trim().length > 0
     );
 
-  const alreadySubmitted = !!publishStatus; // FIX-18
+  const alreadySubmitted = !!publishStatus;
 
   const canGenerateDraft = !!sessionId && !loading;
   const canSaveEdits     = !!sessionId && !!editedText.trim() && !loading && !isLocked;
@@ -777,502 +923,914 @@ export default function Home() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div style={{ maxWidth: 980, margin: "30px auto", padding: 20, fontFamily: "Arial, sans-serif" }}>
-      <h1 style={{ marginBottom: 8 }}>CPL Story Interview</h1>
+    <div style={{ minHeight: "100vh", background: C.offWhite, fontFamily: "'Segoe UI', Arial, sans-serif", color: C.textDark }}>
 
-      {/* ---- Session ID row ---- */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-        {/* FIX-14: htmlFor + aria-label */}
-        <label htmlFor="session-id-input" style={{ minWidth: 90 }}>Session ID</label>
-        <input
-          id="session-id-input"
-          aria-label="Session ID"
-          value={sessionId}
-          onChange={(e) => setSessionId(e.target.value)}
-          style={{ flex: 1, minWidth: 280, padding: 10, border: "1px solid #ccc", borderRadius: 8 }}
-        />
-        <button
-          onClick={startInterview}
-          disabled={loading || !sessionId}
-          aria-label="Start interview session"
-          style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-        >
-          Start Interview
-        </button>
-        <button
-          onClick={() => refreshSession()}
-          disabled={loading || !sessionId}
-          aria-label="Refresh session from backend"
-          style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-        >
-          Refresh Session
-        </button>
-      </div>
-
-      {/* ---- Status bar ---- */}
-      <div style={{ marginBottom: 12, color: "#444" }}>
-        <strong>Status:</strong> {status || "-"}{" "}
-        <span style={{ marginLeft: 12 }}><strong>Section:</strong> {section || "-"}</span>{" "}
-        <span style={{ marginLeft: 12 }}><strong>Turn:</strong> {turn ?? "-"}</span>{" "}
-        <span style={{ marginLeft: 12 }}><strong>Decision:</strong> {decision || "-"}</span>
-      </div>
-
-      {/* ---- Error / Message banners ---- */}
-      {error ? (
-        <div
-          role="alert"
-          style={{ padding: 12, background: "#ffe8e8", border: "1px solid #ffb3b3", borderRadius: 8, marginBottom: 16 }}
-        >
-          <strong>Error:</strong> {error}
-        </div>
-      ) : null}
-
-      {msg ? (
-        <div
-          role="status"
-          style={{ padding: 12, background: "#eef7ee", border: "1px solid #cde9cd", borderRadius: 8, marginBottom: 16 }}
-        >
-          {msg}
-        </div>
-      ) : null}
-
-      {/* ==================================================================== */}
-      {/* Interview panel                                                       */}
-      {/* ==================================================================== */}
-      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginBottom: 18 }}>
-        <h2 style={{ marginTop: 0 }}>Interview</h2>
-
-        {/* Current question */}
-        <div style={{ padding: 14, border: "1px solid #eee", borderRadius: 10, marginBottom: 12 }}>
-          <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Question</div>
-          <div style={{ fontSize: 18, lineHeight: 1.4 }}>
-            {question || 'Click "Start Interview" to fetch the first question.'}
+      {/* ================================================================== */}
+      {/* HEADER                                                              */}
+      {/* ================================================================== */}
+      <header
+        style={{
+          background: C.navy,
+          color: C.white,
+          padding: "0 24px",
+          boxShadow: "0 3px 12px rgba(0,0,0,0.25)",
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+        }}
+      >
+        <div style={{ maxWidth: 960, margin: "0 auto", display: "flex", alignItems: "center", gap: 16, height: 70 }}>
+          <MapLogo size={44} />
+          <div>
+            <div style={{ fontWeight: "700", fontSize: 17, letterSpacing: 0.3, lineHeight: 1.1 }}>
+              California MAP Initiative
+            </div>
+            <div style={{ fontSize: 11, color: C.gold, fontWeight: "500", letterSpacing: 0.2, lineHeight: 1.2, maxWidth: 480 }}>
+              Mapping Articulated Pathways · Credit for Prior Learning · Working Adults &amp; Veterans
+            </div>
+          </div>
+          <div style={{ marginLeft: "auto", fontSize: 13, color: "rgba(255,255,255,0.6)", textAlign: "right" }}>
+            <div style={{ color: C.gold, fontWeight: "700", fontSize: 15 }}>CPL Story Interview</div>
+            {sessionId && (
+              <div style={{ fontSize: 11, marginTop: 1 }}>
+                Session: <span style={{ color: "rgba(255,255,255,0.85)", fontFamily: "monospace" }}>{sessionId.slice(0, 20)}{sessionId.length > 20 ? "…" : ""}</span>
+              </div>
+            )}
           </div>
         </div>
+        {/* Gold accent bar */}
+        <div style={{ height: 3, background: `linear-gradient(90deg, ${C.gold}, ${C.red}, ${C.gold})` }} />
+      </header>
 
-        {/* Agent reflection */}
-        {reflection ? (
-          <div style={{ padding: 12, background: "#f5f5f5", border: "1px solid #e5e5e5", borderRadius: 10, marginBottom: 12 }}>
-            <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Agent reflection</div>
-            <div>{reflection}</div>
-          </div>
-        ) : null}
+      {/* ================================================================== */}
+      {/* MAIN CONTENT                                                        */}
+      {/* ================================================================== */}
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: "28px 20px 60px" }}>
 
-        {/* Answer textarea + char counter (FIX-06 + FIX-14) */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <label htmlFor="answer-textarea" style={{ fontSize: 13, color: "#666" }}>
-              Student Answer
-            </label>
-            <span style={{ fontSize: 12, color: answer.length > MAX_ANSWER_LEN ? "#c00" : "#999" }}>
-              {answer.length.toLocaleString()} / {MAX_ANSWER_LEN.toLocaleString()}
-            </span>
-          </div>
-          <textarea
-            id="answer-textarea"
-            aria-label="Student answer"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            rows={4}
-            maxLength={MAX_ANSWER_LEN}
-            style={{ width: "100%", padding: 12, border: "1px solid #ccc", borderRadius: 10, boxSizing: "border-box" }}
-            placeholder="Type the student's answer here…"
-          />
-        </div>
+        {/* Welcome banner (only before interview starts) */}
+        {!question && !showStoryPanel && (
+          <Card accentColor={C.gold} style={{ marginBottom: 24, background: `linear-gradient(135deg, ${C.navy}08, ${C.gold}12)` }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div style={{ fontSize: 36, lineHeight: 1 }}>🎓</div>
+              <div>
+                <div style={{ fontWeight: "700", fontSize: 18, color: C.navy, marginBottom: 6 }}>
+                  Welcome to the CPL Story Interview
+                </div>
+                <div style={{ color: C.textMid, fontSize: 14, lineHeight: 1.65 }}>
+                  Your experience matters. This interview helps us capture your Credit for Prior Learning (CPL) story —
+                  how your work experience, military service, or other training was recognized for college credit.
+                  There are no wrong answers. Just share your journey in your own words.
+                </div>
+                <div style={{ marginTop: 10, fontSize: 13, color: C.textLight }}>
+                  The interview takes about 10–15 minutes and covers six topic areas.
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
 
-        {/* Action buttons */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-          <button
-            onClick={submitAnswer}
-            disabled={!canSubmitAnswer}
-            aria-label="Submit typed answer"
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333" }}
+        {/* Progress bar (shown when interview is active or complete) */}
+        {(question || status) && (
+          <Card style={{ padding: "16px 20px 8px", marginBottom: 20 }}>
+            <div style={{ fontSize: 12, color: C.textLight, fontWeight: "600", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 }}>
+              Interview Progress
+            </div>
+            <ProgressBar currentSection={section} status={status} />
+          </Card>
+        )}
+
+        {/* ---- Error / Message banners ---- */}
+        {error && (
+          <div
+            role="alert"
+            style={{
+              padding: "12px 16px",
+              background: C.errorBg,
+              border: `1px solid ${C.errorBorder}`,
+              borderLeft: `4px solid ${C.red}`,
+              borderRadius: 10,
+              marginBottom: 16,
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+            }}
           >
-            Submit Answer (Typed)
-          </button>
-
-          <button
-            onClick={startRecording}
-            disabled={loading || isUploading || !sessionId || !question || isRecording}
-            aria-label="Start voice recording"
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333" }}
-          >
-            🎙 Start Recording
-          </button>
-
-          <button
-            onClick={stopRecording}
-            disabled={!isRecording}
-            aria-label="Stop voice recording"
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333" }}
-          >
-            ⏹ Stop
-          </button>
-
-          {/* FIX-02: disabled on isUploading, not on loading */}
-          <button
-            onClick={uploadTranscribeAndSubmitVoice}
-            disabled={isUploading || !recordedBlob || turn == null}
-            aria-label="Upload, transcribe, and submit voice answer"
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333" }}
-          >
-            {isUploading ? "Uploading…" : "⬆️ Upload + Transcribe + Submit (Voice)"}
-          </button>
-
-          <button
-            onClick={finishInterview}
-            disabled={loading}
-            aria-label="Finish interview"
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333" }}
-          >
-            Finish Interview
-          </button>
-        </div>
-
-        {/* Recording indicator */}
-        {isRecording && (
-          <div role="status" style={{ marginTop: 8, color: "#c00", fontWeight: "bold" }}>
-            ● Recording…
+            <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+            <div>
+              <strong style={{ color: C.red }}>Error</strong>
+              <div style={{ marginTop: 2, color: C.textDark, fontSize: 14 }}>{error}</div>
+            </div>
           </div>
         )}
 
-        {/* Upload indicator (FIX-02) */}
-        {isUploading && (
-          <div role="status" style={{ marginTop: 8, color: "#555" }}>
-            ⏳ Uploading and transcribing voice answer…
+        {msg && (
+          <div
+            role="status"
+            style={{
+              padding: "12px 16px",
+              background: C.greenLight,
+              border: `1px solid ${C.greenBorder}`,
+              borderLeft: `4px solid ${C.green}`,
+              borderRadius: 10,
+              marginBottom: 16,
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              fontSize: 14,
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>✅</span>
+            <span>{msg}</span>
           </div>
         )}
 
-        {/* Transcript display */}
-        {transcript ? (
-          <div style={{ marginTop: 10, padding: 10, border: "1px solid #ddd", borderRadius: 8, background: "#fafafa" }}>
-            <div style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>Transcript (from voice)</div>
-            <div style={{ whiteSpace: "pre-wrap" }}>{transcript}</div>
-          </div>
-        ) : null}
-      </div>
+        {/* ================================================================ */}
+        {/* SESSION PANEL                                                     */}
+        {/* ================================================================ */}
+        <Card accentColor={C.navy}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 260px" }}>
+              <label htmlFor="session-id-input" style={{ display: "block", fontSize: 12, fontWeight: "600", color: C.textMid, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                Session ID
+              </label>
+              <input
+                id="session-id-input"
+                aria-label="Session ID"
+                value={sessionId}
+                onChange={(e) => setSessionId(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "9px 12px",
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontFamily: "monospace",
+                  boxSizing: "border-box",
+                  background: C.white,
+                  color: C.textDark,
+                }}
+              />
+            </div>
 
-      {/* ==================================================================== */}
-      {/* Story panel                                                           */}
-      {/* ==================================================================== */}
-      {showStoryPanel && (
-        <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16 }}>
-          <h2 style={{ marginTop: 0 }}>
-            Draft → Student Edit → Approve &amp; Lock → Photo (Optional)
-          </h2>
-
-          {/* Story action buttons */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-            <button
-              onClick={generateDraft}
-              disabled={!canGenerateDraft}
-              aria-label="Generate AI story draft"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Generate Draft
-            </button>
-
-            <button
-              onClick={quickFillDemoDraft}
-              disabled={loading || isLocked}
-              aria-label="Insert demo draft"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Quick Fill Demo Draft
-            </button>
-
-            <button
-              onClick={saveEdits}
-              disabled={!canSaveEdits}
-              aria-label="Save story edits"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Save Edits
-            </button>
-
-            {/* FIX-10: confirmation happens inside approveStory */}
-            <button
-              onClick={() => approveStory(true)}
-              disabled={!canApprove}
-              aria-label="Approve and lock story, then add photo"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Approve &amp; Lock (then photo)
-            </button>
-
-            <button
-              onClick={() => approveStory(false)}
-              disabled={!canApprove}
-              aria-label="Approve and lock story, skip photo"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Approve &amp; Lock (skip photo)
-            </button>
-
-            <button
-              onClick={() => loadPublishPreview()}
-              disabled={loading || !sessionId}
-              aria-label="Load publish preview"
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-            >
-              Load Publish Preview
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 20 }}>
+              <Btn
+                onClick={startInterview}
+                disabled={loading || !sessionId}
+                variant="primary"
+                ariaLabel="Start interview session"
+              >
+                {status ? "↺ Restart Interview" : "▶ Start Interview"}
+              </Btn>
+              <Btn
+                onClick={() => refreshSession()}
+                disabled={loading || !sessionId}
+                variant="ghost"
+                ariaLabel="Refresh session from backend"
+              >
+                🔄 Refresh
+              </Btn>
+            </div>
           </div>
 
-          {/* Status row */}
-          <div style={{ marginBottom: 10, color: "#444" }}>
-            <strong>Approval:</strong> {approvalStatus || "-"}{" "}
-            <span style={{ marginLeft: 12 }}><strong>Photo status:</strong> {photoStatus || "-"}</span>{" "}
-            <span style={{ marginLeft: 12 }}><strong>Draft version:</strong> {storyDraftVersion ?? "-"}</span>
+          {/* Status ribbon */}
+          {status && (
+            <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap", fontSize: 13 }}>
+              {[
+                ["Status", status],
+                ["Section", section || "—"],
+                ["Turn", turn ?? "—"],
+                ["Decision", decision || "—"],
+              ].map(([label, val]) => (
+                <div key={label}>
+                  <span style={{ color: C.textLight, fontWeight: "600", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>{label} </span>
+                  <span
+                    style={{
+                      background: label === "Status" && status === "complete" ? C.greenLight : C.offWhite,
+                      color: label === "Status" && status === "complete" ? C.green : C.navy,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 5,
+                      padding: "2px 8px",
+                      fontWeight: "600",
+                      fontSize: 12,
+                    }}
+                  >
+                    {String(val)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* ================================================================ */}
+        {/* INTERVIEW PANEL                                                   */}
+        {/* ================================================================ */}
+        <Card accentColor={C.navy}>
+          {/* Section header */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div
+              style={{
+                background: C.navy,
+                color: C.white,
+                borderRadius: 8,
+                padding: "4px 12px",
+                fontSize: 12,
+                fontWeight: "700",
+                letterSpacing: 0.4,
+                textTransform: "uppercase",
+              }}
+            >
+              {section || "Interview"}
+            </div>
+            {turn != null && (
+              <div style={{ fontSize: 13, color: C.textLight }}>
+                Turn <strong>{turn}</strong>
+              </div>
+            )}
           </div>
 
-          {/* FIX-17: locked notice */}
-          {isLocked && (
-            <div style={{ padding: 10, background: "#fffbe6", border: "1px solid #ffe58f", borderRadius: 8, marginBottom: 12 }}>
-              🔒 Story is approved and locked. The editor below is read-only.
+          {/* Section guidance */}
+          {section && SECTION_GUIDANCE[section] && (
+            <div
+              style={{
+                background: `${C.navy}0a`,
+                border: `1px solid ${C.navy}22`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                marginBottom: 14,
+                fontSize: 13,
+                color: C.navy,
+                lineHeight: 1.55,
+              }}
+            >
+              <strong style={{ color: C.navy }}>Guidance:</strong> {SECTION_GUIDANCE[section]}
             </div>
           )}
 
-          {/* Story editor + char counter (FIX-06 + FIX-14 + FIX-17) */}
+          {/* Current question */}
+          <div
+            style={{
+              padding: 16,
+              background: C.white,
+              border: `1px solid ${C.border}`,
+              borderRadius: 10,
+              marginBottom: 14,
+              boxShadow: "inset 0 1px 4px rgba(27,58,107,0.05)",
+            }}
+          >
+            <div style={{ fontSize: 11, color: C.textLight, marginBottom: 8, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" }}>
+              Question
+            </div>
+            <div style={{ fontSize: 17, lineHeight: 1.55, color: C.textDark, fontWeight: "500" }}>
+              {question || (
+                <span style={{ color: C.textLight, fontStyle: "italic" }}>
+                  Click "▶ Start Interview" above to receive your first question.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Agent reflection */}
+          {reflection && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: `${C.gold}18`,
+                border: `1px solid ${C.gold}55`,
+                borderRadius: 10,
+                marginBottom: 14,
+                fontSize: 13,
+                lineHeight: 1.55,
+              }}
+            >
+              <div style={{ fontSize: 11, color: C.textLight, marginBottom: 4, fontWeight: "600", letterSpacing: 0.4, textTransform: "uppercase" }}>
+                Interviewer Note
+              </div>
+              <div style={{ color: C.textDark }}>{reflection}</div>
+            </div>
+          )}
+
+          {/* Answer textarea */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <label htmlFor="story-editor" style={{ fontSize: 13, color: "#666" }}>
-                {isLocked
-                  ? "Student Editor (read-only — story locked)"
-                  : 'Student Editor (AI draft loads here after "Generate Draft")'}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <label htmlFor="answer-textarea" style={{ fontSize: 12, fontWeight: "600", color: C.textMid, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                Your Answer
               </label>
-              <span style={{ fontSize: 12, color: editedText.length > MAX_STORY_LEN ? "#c00" : "#999" }}>
-                {editedText.length.toLocaleString()} / {MAX_STORY_LEN.toLocaleString()}
+              <span
+                style={{
+                  fontSize: 12,
+                  color: answer.length > MAX_ANSWER_LEN ? C.red : C.textLight,
+                  fontWeight: answer.length > MAX_ANSWER_LEN ? "700" : "400",
+                }}
+              >
+                {answer.length.toLocaleString()} / {MAX_ANSWER_LEN.toLocaleString()}
               </span>
             </div>
             <textarea
-              id="story-editor"
-              aria-label="Story editor"
-              aria-readonly={isLocked}
-              value={editedText}
-              onChange={(e) => { if (!isLocked) setEditedText(e.target.value); }}
-              readOnly={isLocked}
-              rows={12}
+              id="answer-textarea"
+              aria-label="Student answer"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              rows={4}
+              maxLength={MAX_ANSWER_LEN}
               style={{
                 width: "100%",
                 padding: 12,
-                border: "1px solid #ccc",
+                border: `1px solid ${C.border}`,
                 borderRadius: 10,
                 boxSizing: "border-box",
-                background: isLocked ? "#f9f9f9" : "#fff",
-                cursor: isLocked ? "not-allowed" : "text",
+                fontSize: 14,
+                lineHeight: 1.55,
+                resize: "vertical",
+                fontFamily: "inherit",
+                color: C.textDark,
+                background: C.white,
+                outline: `2px solid transparent`,
+                transition: "border-color 0.2s",
               }}
-              placeholder='Click "Generate Draft", or use "Quick Fill Demo Draft"…'
+              placeholder="Type your answer here, or use voice recording below…"
             />
           </div>
 
-          {/* Approved / locked story preview */}
-          {approvedText ? (
-            <div style={{ padding: 12, background: "#f5fbff", border: "1px solid #d8efff", borderRadius: 10, marginBottom: 16 }}>
-              <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Approved Story (locked)</div>
-              <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{approvedText}</pre>
-            </div>
-          ) : null}
+          {/* Action buttons row */}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <Btn
+              onClick={submitAnswer}
+              disabled={!canSubmitAnswer}
+              variant="primary"
+              ariaLabel="Submit typed answer"
+            >
+              Submit Answer
+            </Btn>
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Photo section                                                     */}
-          {/* ---------------------------------------------------------------- */}
-          {showPhotoPanel && (
-            <div style={{ borderTop: "1px solid #eee", paddingTop: 14 }}>
-              <h3 style={{ marginTop: 0 }}>Photo (Optional)</h3>
+            <Btn
+              onClick={startRecording}
+              disabled={loading || isUploading || !sessionId || !question || isRecording}
+              variant={isRecording ? "recording" : "ghost"}
+              ariaLabel="Start voice recording"
+            >
+              🎙 {isRecording ? "Recording…" : "Start Recording"}
+            </Btn>
 
-              {/* FIX-07: both checkboxes default false; user must opt in */}
-              <div style={{ display: "flex", gap: 18, marginBottom: 12, flexWrap: "wrap" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Consent to include photo in PDF"
-                    checked={photoConsentPdf}
-                    onChange={(e) => setPhotoConsentPdf(e.target.checked)}
-                  />
-                  Consent: include photo in PDF
-                </label>
+            <Btn
+              onClick={stopRecording}
+              disabled={!isRecording}
+              variant="ghost"
+              ariaLabel="Stop voice recording"
+            >
+              ⏹ Stop
+            </Btn>
 
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    aria-label="Consent to publish photo online"
-                    checked={photoConsentPublish}
-                    onChange={(e) => setPhotoConsentPublish(e.target.checked)}
-                  />
-                  Consent: include photo for publishing
-                </label>
-              </div>
+            <Btn
+              onClick={uploadTranscribeAndSubmitVoice}
+              disabled={isUploading || !recordedBlob || turn == null}
+              variant="outline"
+              ariaLabel="Upload, transcribe, and submit voice answer"
+            >
+              {isUploading ? "Uploading…" : "⬆️ Submit Voice"}
+            </Btn>
 
-              <div style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-                <button
-                  onClick={getPhotoUploadUrl}
-                  disabled={loading || !sessionId}
-                  aria-label="Get photo upload URL"
-                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-                >
-                  Get Photo Upload URL
-                </button>
+            <Btn
+              onClick={finishInterview}
+              disabled={loading}
+              variant="ghost"
+              ariaLabel="Finish interview"
+            >
+              Finish Interview
+            </Btn>
+          </div>
 
-                <button
-                  onClick={skipPhoto}
-                  disabled={loading || !sessionId}
-                  aria-label="Skip photo upload"
-                  style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-                >
-                  Skip Photo
-                </button>
-              </div>
-
-              {photoUploadUrl ? (
-                <div style={{ padding: 12, border: "1px solid #eee", borderRadius: 10, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
-                    Upload JPG (max {MAX_PHOTO_MB} MB)
-                  </div>
-                  <input
-                    type="file"
-                    accept="image/jpeg"
-                    aria-label="Choose JPEG photo file"
-                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-                  />
-                  {/* FIX-08: live file validation feedback */}
-                  {photoFile && (
-                    <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-                      Selected: {photoFile.name}{" "}
-                      ({(photoFile.size / 1024 / 1024).toFixed(2)} MB)
-                      {!photoFile.type.startsWith("image/jpeg") && (
-                        <span style={{ color: "#c00", marginLeft: 8 }}>⚠ Must be a JPEG file</span>
-                      )}
-                      {photoFile.size > MAX_PHOTO_MB * 1024 * 1024 && (
-                        <span style={{ color: "#c00", marginLeft: 8 }}>
-                          ⚠ File too large (max {MAX_PHOTO_MB} MB)
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div style={{ marginTop: 10 }}>
-                    <button
-                      onClick={uploadPhotoAndSubmit}
-                      disabled={loading || !photoFile}
-                      aria-label="Upload photo and confirm with backend"
-                      style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #333", cursor: "pointer" }}
-                    >
-                      Upload Photo + Submit
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
-                    Object name: <code>{photoUploadObjectName}</code>
-                  </div>
-                </div>
-              ) : null}
-
-              {photoStatus === "uploaded" && photoObject ? (
-                <div style={{ padding: 12, background: "#eef7ee", border: "1px solid #cde9cd", borderRadius: 10 }}>
-                  Photo uploaded: <code>{photoObject}</code>
-                </div>
-              ) : null}
-
-              {photoStatus === "skipped" ? (
-                <div style={{ padding: 12, background: "#f5f5f5", border: "1px solid #e5e5e5", borderRadius: 10 }}>
-                  Photo skipped.
-                </div>
-              ) : null}
+          {/* Recording status */}
+          {isRecording && (
+            <div
+              role="status"
+              style={{
+                marginTop: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: C.red,
+                fontWeight: "700",
+                fontSize: 14,
+              }}
+            >
+              <span style={{ animation: "pulse 1s infinite", fontSize: 16 }}>●</span>
+              Recording in progress — speak clearly and naturally
             </div>
           )}
 
-          {/* FIX-11: DEBUG panel removed — was visible in production build */}
+          {isUploading && (
+            <div role="status" style={{ marginTop: 10, color: C.textMid, fontSize: 13 }}>
+              ⏳ Uploading and transcribing voice answer…
+            </div>
+          )}
 
-          {/* ---------------------------------------------------------------- */}
-          {/* Publish preview                                                   */}
-          {/* ---------------------------------------------------------------- */}
-          {shouldShowPublishPreview && (
-            <div style={{ borderTop: "1px solid #eee", paddingTop: 14, marginTop: 14 }}>
-              <h3 style={{ marginTop: 0 }}>Publish Preview (Student can review)</h3>
+          {/* Transcript display */}
+          {transcript && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 12,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                background: C.offWhite,
+              }}
+            >
+              <div style={{ fontSize: 11, color: C.textLight, marginBottom: 6, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                Voice Transcript
+              </div>
+              <div style={{ whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.55 }}>{transcript}</div>
+            </div>
+          )}
+        </Card>
 
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-                {/* Photo column */}
-                <div style={{ minWidth: 240, maxWidth: 320 }}>
-                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>Photo preview</div>
-                  {(photoStatus || "").toLowerCase() === "uploaded" ? (
-                    photoPreviewUrl ? (
-                      <img
-                        src={photoPreviewUrl}
-                        alt="Student photo preview"
-                        style={{ width: "100%", borderRadius: 12, border: "1px solid #ddd" }}
+        {/* ================================================================ */}
+        {/* STORY PANEL                                                       */}
+        {/* ================================================================ */}
+        {showStoryPanel && (
+          <Card accentColor={C.red}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div
+                style={{
+                  background: C.red,
+                  color: C.white,
+                  borderRadius: 8,
+                  padding: "4px 12px",
+                  fontSize: 12,
+                  fontWeight: "700",
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                }}
+              >
+                Your Story
+              </div>
+              <div style={{ fontSize: 13, color: C.textLight }}>
+                Draft → Edit → Approve &amp; Lock → Photo
+              </div>
+            </div>
+
+            {/* Story action buttons */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+              <Btn
+                onClick={generateDraft}
+                disabled={!canGenerateDraft}
+                variant="primary"
+                ariaLabel="Generate AI story draft"
+              >
+                ✨ Generate Draft
+              </Btn>
+
+              <Btn
+                onClick={quickFillDemoDraft}
+                disabled={loading || isLocked}
+                variant="ghost"
+                ariaLabel="Insert demo draft"
+              >
+                Quick Fill Demo
+              </Btn>
+
+              <Btn
+                onClick={saveEdits}
+                disabled={!canSaveEdits}
+                variant="outline"
+                ariaLabel="Save story edits"
+              >
+                💾 Save Edits
+              </Btn>
+
+              <Btn
+                onClick={() => approveStory(true)}
+                disabled={!canApprove}
+                variant="gold"
+                ariaLabel="Approve and lock story, then add photo"
+              >
+                🔒 Approve &amp; Lock (+ Photo)
+              </Btn>
+
+              <Btn
+                onClick={() => approveStory(false)}
+                disabled={!canApprove}
+                variant="outline"
+                ariaLabel="Approve and lock story, skip photo"
+              >
+                🔒 Approve &amp; Lock (No Photo)
+              </Btn>
+
+              <Btn
+                onClick={() => loadPublishPreview()}
+                disabled={loading || !sessionId}
+                variant="ghost"
+                ariaLabel="Load publish preview"
+              >
+                👁 Preview
+              </Btn>
+            </div>
+
+            {/* Status row */}
+            <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap", fontSize: 13 }}>
+              {[
+                ["Approval", approvalStatus || "—"],
+                ["Photo", photoStatus || "—"],
+                ["Draft version", storyDraftVersion ?? "—"],
+              ].map(([label, val]) => (
+                <div key={label}>
+                  <span style={{ color: C.textLight, fontWeight: "600", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 }}>{label} </span>
+                  <span
+                    style={{
+                      background: C.offWhite,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 5,
+                      padding: "2px 8px",
+                      fontWeight: "600",
+                      fontSize: 12,
+                      color: C.navy,
+                    }}
+                  >
+                    {String(val)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Locked notice */}
+            {isLocked && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  background: C.warnBg,
+                  border: `1px solid ${C.warnBorder}`,
+                  borderLeft: `4px solid ${C.gold}`,
+                  borderRadius: 8,
+                  marginBottom: 14,
+                  fontSize: 13,
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                }}
+              >
+                🔒 <strong>Story is approved and locked.</strong> The editor below is read-only.
+              </div>
+            )}
+
+            {/* Story editor + char counter */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label htmlFor="story-editor" style={{ fontSize: 12, fontWeight: "600", color: C.textMid, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  {isLocked ? "Story (locked — read-only)" : "Story Editor"}
+                </label>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: editedText.length > MAX_STORY_LEN ? C.red : C.textLight,
+                  }}
+                >
+                  {editedText.length.toLocaleString()} / {MAX_STORY_LEN.toLocaleString()}
+                </span>
+              </div>
+              <textarea
+                id="story-editor"
+                aria-label="Story editor"
+                aria-readonly={isLocked}
+                value={editedText}
+                onChange={(e) => { if (!isLocked) setEditedText(e.target.value); }}
+                readOnly={isLocked}
+                rows={12}
+                style={{
+                  width: "100%",
+                  padding: 14,
+                  border: `1px solid ${isLocked ? C.warnBorder : C.border}`,
+                  borderRadius: 10,
+                  boxSizing: "border-box",
+                  background: isLocked ? "#fffef7" : C.white,
+                  cursor: isLocked ? "not-allowed" : "text",
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  fontFamily: "Georgia, serif",
+                  resize: "vertical",
+                }}
+                placeholder='Click "✨ Generate Draft" or use "Quick Fill Demo"…'
+              />
+            </div>
+
+            {/* Approved story preview */}
+            {approvedText ? (
+              <div
+                style={{
+                  padding: 14,
+                  background: "#f0faf5",
+                  border: `1px solid ${C.greenBorder}`,
+                  borderLeft: `4px solid ${C.green}`,
+                  borderRadius: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <div style={{ fontSize: 11, color: C.textLight, marginBottom: 6, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                  Approved Story (locked)
+                </div>
+                <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14, lineHeight: 1.65, fontFamily: "Georgia, serif" }}>{approvedText}</pre>
+              </div>
+            ) : null}
+
+            {/* ============================================================ */}
+            {/* PHOTO SECTION                                                 */}
+            {/* ============================================================ */}
+            {showPhotoPanel && (
+              <div
+                style={{
+                  borderTop: `2px solid ${C.border}`,
+                  paddingTop: 18,
+                  marginTop: 4,
+                }}
+              >
+                <div style={{ fontWeight: "700", fontSize: 15, color: C.navy, marginBottom: 4 }}>
+                  📷 Photo (Optional)
+                </div>
+                <div style={{ fontSize: 13, color: C.textMid, marginBottom: 14 }}>
+                  Add a profile photo to go alongside your story. This is completely optional.
+                </div>
+
+                {/* Consent checkboxes */}
+                <div style={{ display: "flex", gap: 20, marginBottom: 14, flexWrap: "wrap" }}>
+                  {[
+                    [photoConsentPdf, setPhotoConsentPdf, "consent-pdf", "Include photo in PDF document"],
+                    [photoConsentPublish, setPhotoConsentPublish, "consent-publish", "Include photo for online publishing"],
+                  ].map(([checked, setter, id, labelText]) => (
+                    <label
+                      key={id}
+                      htmlFor={id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 13,
+                        cursor: "pointer",
+                        padding: "8px 12px",
+                        border: `1px solid ${checked ? C.navy : C.border}`,
+                        borderRadius: 8,
+                        background: checked ? `${C.navy}0a` : C.white,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        id={id}
+                        aria-label={labelText}
+                        checked={checked}
+                        onChange={(e) => setter(e.target.checked)}
+                        style={{ accentColor: C.navy, width: 16, height: 16 }}
                       />
-                    ) : (
-                      <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 10 }}>
-                        No preview URL yet. Click "Load Publish Preview".
-                      </div>
-                    )
-                  ) : (
-                    <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 10 }}>
-                      Photo skipped.
-                    </div>
-                  )}
+                      <span style={{ color: C.textDark }}>{labelText}</span>
+                    </label>
+                  ))}
                 </div>
 
-                {/* Story text column */}
-                <div style={{ flex: 1, minWidth: 320 }}>
-                  <div style={{ fontSize: 13, color: "#666", marginBottom: 6 }}>
-                    Final story text (what will be published)
-                  </div>
-                  <div style={{ padding: 12, border: "1px solid #ddd", borderRadius: 12, background: "#fff" }}>
-                    <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-                      {finalStoryText || '(No story text loaded yet. Click "Load Publish Preview".)'}
-                    </pre>
-                  </div>
+                <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+                  <Btn
+                    onClick={getPhotoUploadUrl}
+                    disabled={loading || !sessionId}
+                    variant="outline"
+                    ariaLabel="Get photo upload URL"
+                  >
+                    Get Upload URL
+                  </Btn>
+                  <Btn
+                    onClick={skipPhoto}
+                    disabled={loading || !sessionId}
+                    variant="ghost"
+                    ariaLabel="Skip photo upload"
+                  >
+                    Skip Photo
+                  </Btn>
                 </div>
-              </div>
 
-              <div style={{ marginTop: 10, fontSize: 12, color: "#666" }}>
-                Tip: Publish preview uses Approved text first, then Edited text, then Draft.
-              </div>
-
-              {/* FIX-01: Submit to MAP button / confirmation message */}
-              <div style={{ marginTop: 16 }}>
-                {alreadySubmitted ? (
+                {photoUploadUrl ? (
                   <div
                     style={{
                       padding: 14,
-                      background: "#eef7ee",
-                      border: "1px solid #cde9cd",
+                      border: `1px solid ${C.border}`,
                       borderRadius: 10,
-                      fontWeight: "bold",
+                      marginBottom: 12,
+                      background: C.offWhite,
                     }}
                   >
-                    ✅ Story submitted to MAP! Staff will review before publishing.
+                    <div style={{ fontSize: 12, color: C.textMid, marginBottom: 8, fontWeight: "600" }}>
+                      Choose JPEG photo (max {MAX_PHOTO_MB} MB)
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/jpeg"
+                      aria-label="Choose JPEG photo file"
+                      onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
+                      style={{ fontSize: 13 }}
+                    />
+                    {photoFile && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: C.textMid }}>
+                        <strong>{photoFile.name}</strong> ({(photoFile.size / 1024 / 1024).toFixed(2)} MB)
+                        {!photoFile.type.startsWith("image/jpeg") && (
+                          <span style={{ color: C.red, marginLeft: 8 }}>⚠ Must be JPEG</span>
+                        )}
+                        {photoFile.size > MAX_PHOTO_MB * 1024 * 1024 && (
+                          <span style={{ color: C.red, marginLeft: 8 }}>⚠ Too large (max {MAX_PHOTO_MB} MB)</span>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 10 }}>
+                      <Btn
+                        onClick={uploadPhotoAndSubmit}
+                        disabled={loading || !photoFile}
+                        variant="primary"
+                        ariaLabel="Upload photo and confirm with backend"
+                      >
+                        Upload Photo
+                      </Btn>
+                    </div>
+                    {photoUploadObjectName && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: C.textLight }}>
+                        Object: <code>{photoUploadObjectName}</code>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <button
-                    onClick={submitFinal}
-                    disabled={loading}
-                    aria-label="Submit story to MAP for review"
+                ) : null}
+
+                {photoStatus === "uploaded" && photoObject && (
+                  <div
                     style={{
-                      padding: "12px 20px",
+                      padding: "10px 14px",
+                      background: C.greenLight,
+                      border: `1px solid ${C.greenBorder}`,
                       borderRadius: 10,
-                      border: "none",
-                      background: "#1a7f3c",
-                      color: "#fff",
-                      fontWeight: "bold",
-                      fontSize: 15,
-                      cursor: loading ? "not-allowed" : "pointer",
-                      opacity: loading ? 0.7 : 1,
+                      fontSize: 13,
                     }}
                   >
-                    ✅ Submit My Story to MAP
-                  </button>
+                    ✅ Photo uploaded: <code style={{ fontSize: 11 }}>{photoObject}</code>
+                  </div>
+                )}
+
+                {photoStatus === "skipped" && (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      background: C.offWhite,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 10,
+                      fontSize: 13,
+                      color: C.textMid,
+                    }}
+                  >
+                    Photo skipped — your story will be published without a photo.
+                  </div>
                 )}
               </div>
+            )}
+
+            {/* ============================================================ */}
+            {/* PUBLISH PREVIEW                                               */}
+            {/* ============================================================ */}
+            {shouldShowPublishPreview && (
+              <div
+                style={{
+                  borderTop: `2px solid ${C.border}`,
+                  paddingTop: 18,
+                  marginTop: 18,
+                }}
+              >
+                <div style={{ fontWeight: "700", fontSize: 15, color: C.navy, marginBottom: 4 }}>
+                  👁 Publish Preview
+                </div>
+                <div style={{ fontSize: 13, color: C.textMid, marginBottom: 16 }}>
+                  Review how your story will appear when published. When you are satisfied, click the submit button below.
+                </div>
+
+                <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  {/* Photo column */}
+                  <div style={{ minWidth: 200, maxWidth: 280 }}>
+                    <div style={{ fontSize: 11, color: C.textLight, marginBottom: 8, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                      Photo
+                    </div>
+                    {(photoStatus || "").toLowerCase() === "uploaded" ? (
+                      photoPreviewUrl ? (
+                        <img
+                          src={photoPreviewUrl}
+                          alt="Student photo preview"
+                          style={{ width: "100%", borderRadius: 12, border: `2px solid ${C.border}`, boxShadow: "0 4px 12px rgba(0,0,0,0.12)" }}
+                        />
+                      ) : (
+                        <div style={{ padding: 12, border: `1px dashed ${C.border}`, borderRadius: 10, fontSize: 13, color: C.textLight }}>
+                          No preview URL yet. Click "👁 Preview".
+                        </div>
+                      )
+                    ) : (
+                      <div style={{ padding: 12, border: `1px dashed ${C.border}`, borderRadius: 10, fontSize: 13, color: C.textLight }}>
+                        No photo included.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Story text column */}
+                  <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ fontSize: 11, color: C.textLight, marginBottom: 8, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.4 }}>
+                      Final Story
+                    </div>
+                    <div
+                      style={{
+                        padding: 16,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 12,
+                        background: C.white,
+                        boxShadow: "0 2px 8px rgba(27,58,107,0.06)",
+                      }}
+                    >
+                      <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 14, lineHeight: 1.7, fontFamily: "Georgia, serif" }}>
+                        {finalStoryText || '(No story text loaded yet — click "👁 Preview")'}
+                      </pre>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: C.textLight }}>
+                      Uses approved text → edited text → draft (in priority order)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit to MAP button */}
+                <div style={{ marginTop: 20 }}>
+                  {alreadySubmitted ? (
+                    <div
+                      style={{
+                        padding: "16px 20px",
+                        background: C.greenLight,
+                        border: `2px solid ${C.greenBorder}`,
+                        borderRadius: 12,
+                        fontWeight: "700",
+                        fontSize: 16,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}
+                    >
+                      <span style={{ fontSize: 24 }}>🎉</span>
+                      <div>
+                        <div style={{ color: C.green }}>Story submitted to MAP!</div>
+                        <div style={{ fontWeight: "400", fontSize: 13, color: C.textMid, marginTop: 2 }}>
+                          Staff will review your story before it is published. Thank you for sharing your journey!
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: 13, color: C.textMid, marginBottom: 10 }}>
+                        Ready to share your story? By submitting, you are sharing your CPL experience with the California MAP Initiative.
+                      </div>
+                      <Btn
+                        onClick={submitFinal}
+                        disabled={loading}
+                        variant="success"
+                        ariaLabel="Submit story to MAP for review"
+                        style={{ fontSize: 15, padding: "13px 28px" }}
+                      >
+                        ✅ Submit My Story to MAP
+                      </Btn>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* Footer */}
+        <div
+          style={{
+            textAlign: "center",
+            fontSize: 12,
+            color: C.textLight,
+            marginTop: 20,
+            paddingTop: 20,
+            borderTop: `1px solid ${C.border}`,
+          }}
+        >
+          <div style={{ marginBottom: 4 }}>
+            California MAP Initiative · Credit for Prior Learning · Working Adults &amp; Veterans
+          </div>
+          {API_BASE && (
+            <div style={{ fontFamily: "monospace", fontSize: 11 }}>
+              API: {API_BASE}
             </div>
           )}
         </div>
-      )}
+      </main>
 
-      {/* Footer */}
-      <div style={{ marginTop: 22, fontSize: 13, color: "#666" }}>
-        <div><strong>Backend:</strong> {API_BASE || "(missing NEXT_PUBLIC_API_BASE)"}</div>
-      </div>
+      {/* Pulse animation for recording indicator */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        textarea:focus, input:focus {
+          outline: 2px solid ${C.navy};
+          outline-offset: 1px;
+        }
+      `}</style>
     </div>
   );
 }
