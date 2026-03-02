@@ -109,22 +109,32 @@ export default function Home() {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  // FIX-19: on mount, read ?session= and ?token= from the invite URL
-  // The backend /trigger endpoint emails a link of the form:
-  //   https://<your-app>/?session=<sessionId>&token=<sessionToken>
+  // FIX-15 + FIX-19 combined: read invite URL params on mount, then decide
+  // whether to use them or auto-generate a session ID.
+  //
+  // WHY combined: React 18 batches state updates from multiple effects that
+  // run on the same render. If FIX-19 and FIX-15 were separate effects, both
+  // ran in the same cycle and the last one (FIX-15's CPL_ auto-id) always
+  // overwrote the URL session — losing the invite token. One effect, one winner.
+  //
+  // Flow:
+  //   Invite link  → ?session=<id>&token=<tok> → use both, skip auto-generate
+  //   Direct access → no URL params            → auto-generate CPL_<timestamp>
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
+    const params     = new URLSearchParams(window.location.search);
     const urlSession = params.get("session");
     const urlToken   = params.get("token");
-    if (urlSession) setSessionId(urlSession);
-    if (urlToken)   setSessionToken(urlToken);
-  }, []); // run once on mount
 
-  // FIX-15: CPL_ prefix (was UI_TEST_) — only auto-generate if no URL param
-  useEffect(() => {
-    if (!sessionId) setSessionId(`CPL_${Date.now()}`);
-  }, [sessionId]);
+    if (urlSession) {
+      // Student arrived via invite email link — use the pre-created session + token
+      setSessionId(urlSession);
+      setSessionToken(urlToken || "");
+    } else {
+      // Direct / staff-testing access — auto-generate a throwaway session ID
+      setSessionId(`CPL_${Date.now()}`);
+    }
+  }, []); // run exactly once on mount
 
   // Clear stale preview when session ID changes
   useEffect(() => {
